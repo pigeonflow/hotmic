@@ -47,6 +47,9 @@ npx @pigeonflow/hotmic --name "standup" --persist
 # Public room with password (accessible from anywhere)
 npx @pigeonflow/hotmic --public --password "shhh"
 
+# LAN with HTTPS (mic works without tunnel)
+npx @pigeonflow/hotmic --https
+
 # Custom limits
 npx @pigeonflow/hotmic --max 4 --ttl 30 --name "quick sync"
 ```
@@ -57,6 +60,7 @@ npx @pigeonflow/hotmic --max 4 --ttl 30 --name "quick sync"
 |------|---------|-------------|
 | `--name <name>` | random | Room name |
 | `--public` | off | Expose via Cloudflare tunnel (HTTPS) |
+| `--https` | off | Self-signed HTTPS for LAN (mic works without tunnel) |
 | `--persist` | off | Room lives until last person leaves |
 | `--password <s>` | none | Require password to join |
 | `--ttl <min>` | 60 | Room time-to-live in minutes |
@@ -80,7 +84,7 @@ Mesh topology caps at ~8 participants (each peer connects to every other peer). 
 
 ## Limitations
 
-- **HTTPS required for mic access** — use `--public` or access via `localhost`. Plain HTTP on a LAN IP won't prompt for microphone permission (browser security policy).
+- **HTTPS required for mic access** — use `--public` for a tunnel, `--https` for a self-signed cert on your LAN, or access via `localhost`. Plain HTTP on a LAN IP won't prompt for microphone permission (browser security policy).
 - **STUN only** — works for ~80% of network configurations. Symmetric NATs and strict corporate firewalls may block peer connections. TURN relay support is planned.
 - **Mesh topology** — each participant connects to every other. Works great for 2-8 people, won't scale to 50.
 

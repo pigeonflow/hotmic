@@ -16,7 +16,7 @@ let statusCallback: StatusCb | null = null;
 export function onStatusChange(cb: StatusCb) { statusCallback = cb; }
 
 export function startServer(
-  opts: { port: number; name?: string; password?: string; max?: number; ttl?: number },
+  opts: { port: number; name?: string; password?: string; max?: number; ttl?: number; https?: boolean },
   onReady: OnReady
 ) {
   const app = new Hono();
@@ -163,17 +163,48 @@ export function startServer(
     })
   );
 
-  const server = serve({ fetch: app.fetch, port: opts.port }, () => {
-    injectWebSocket(server);
-    const nets = os.networkInterfaces();
-    let ip = "localhost";
-    for (const name of Object.keys(nets)) {
-      for (const net of nets[name] || []) {
-        if (net.family === "IPv4" && !net.internal) { ip = net.address; break; }
-      }
-      if (ip !== "localhost") break;
+  async function listen() {
+    let serverOpts: any = { fetch: app.fetch, port: opts.port };
+    const protocol = opts.https ? "https" : "http";
+
+    if (opts.https) {
+      const selfsigned = await import("selfsigned");
+      const attrs = [{ name: "commonName", value: "hotmic.local" }];
+      const pems: any = await (selfsigned as any).generate(attrs, {
+        keySize: 2048,
+        days: 1,
+        algorithm: "sha256",
+        extensions: [
+          { name: "subjectAltName", altNames: [
+            { type: 2, value: "localhost" },
+            { type: 7, ip: "127.0.0.1" },
+            { type: 7, ip: getLocalIP() },
+          ]},
+        ],
+      });
+      const { createServer } = await import("https");
+      serverOpts.createServer = createServer;
+      serverOpts.serverOptions = { key: pems.private, cert: pems.cert };
+      console.log("  \x1b[2m🔒 Self-signed cert generated (accept browser warning once)\x1b[0m");
     }
-    const localUrl = `http://${ip}:${opts.port}/room/${room.id}`;
-    onReady(localUrl, room);
-  });
+
+    const server = serve(serverOpts, () => {
+      injectWebSocket(server);
+      const ip = getLocalIP();
+      const localUrl = `${protocol}://${ip}:${opts.port}/room/${room.id}`;
+      onReady(localUrl, room);
+    });
+  }
+
+  listen();
+}
+
+function getLocalIP(): string {
+  const nets = os.networkInterfaces();
+  for (const name of Object.keys(nets)) {
+    for (const net of nets[name] || []) {
+      if (net.family === "IPv4" && !net.internal) return net.address;
+    }
+  }
+  return "localhost";
 }

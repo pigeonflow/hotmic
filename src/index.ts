@@ -15,6 +15,7 @@ program
   .option("-m, --max <number>", "max participants", (v) => parseInt(v), 8)
   .option("--password <secret>", "room password")
   .option("--public", "expose via Cloudflare tunnel")
+  .option("--https", "self-signed HTTPS for LAN (mic access without --public)")
   .option("--persist", "room stays open until everyone leaves")
   .parse();
 
@@ -22,18 +23,16 @@ const opts = program.opts();
 const port = opts.port || (3000 + Math.floor(Math.random() * 6000));
 const ttl = opts.persist ? 0 : opts.ttl;
 
-// Live terminal status
+let statusLine = 0;
+
 function printStatus(room: Room) {
   const parts = Array.from(room.participants.values());
   if (parts.length === 0) return;
-
-  // Move cursor to status area and rewrite
   const lines = parts.map(p => {
     const icon = !p.ws ? "⚫" : p.muted ? "🔇" : p.speaking ? "🔊" : "🎤";
     const status = !p.ws ? "(offline)" : p.muted ? "(muted)" : p.speaking ? "(speaking)" : "";
     return `  ${icon} ${p.name} ${status}`;
   });
-
   process.stdout.write(`\x1b[s\x1b[${statusLine}H\x1b[0J`);
   console.log("  \x1b[2mParticipants:\x1b[0m");
   for (const l of lines) console.log(l);
@@ -41,20 +40,21 @@ function printStatus(room: Room) {
   process.stdout.write("\x1b[u");
 }
 
-let statusLine = 0;
-
-onStatusChange((room) => {
-  if (statusLine > 0) printStatus(room);
-});
+onStatusChange((room) => { if (statusLine > 0) printStatus(room); });
 
 startServer(
-  { port, name: opts.name, password: opts.password, max: opts.max, ttl },
+  { port, name: opts.name, password: opts.password, max: opts.max, ttl, https: opts.https },
   async (localUrl, room) => {
     let shareUrl = localUrl;
 
+    const mode = opts.public ? "public" : opts.https ? "https" : "local";
+    const modeLabel = mode === "public" ? "\x1b[33m(public mode)\x1b[0m"
+      : mode === "https" ? "\x1b[32m(HTTPS)\x1b[0m" : "";
+
+    console.log("");
+    console.log(`  \x1b[36m\x1b[1m🎙️ hotmic\x1b[0m  ${modeLabel}`);
+
     if (opts.public) {
-      console.log("");
-      console.log("  \x1b[36m\x1b[1m🎙️ hotmic\x1b[0m  \x1b[33m(public mode)\x1b[0m");
       console.log("");
       try {
         const tunnelBase = await startTunnel(port);
@@ -63,9 +63,13 @@ startServer(
       } catch (err: any) {
         console.log(`  \x1b[31m✗ Tunnel failed: ${err.message}\x1b[0m`);
       }
-    } else {
+    }
+
+    if (opts.https && !opts.public) {
       console.log("");
-      console.log("  \x1b[36m\x1b[1m🎙️ hotmic\x1b[0m");
+      console.log("  \x1b[2m⚠ Your browser will show a security warning.\x1b[0m");
+      console.log("  \x1b[2m  Click \"Advanced\" → \"Proceed\" to accept the self-signed cert.\x1b[0m");
+      console.log("  \x1b[2m  You only need to do this once per device.\x1b[0m");
     }
 
     console.log("");
@@ -84,8 +88,7 @@ startServer(
       console.log("");
       console.log("  \x1b[2mScan the QR code or share the URL. Ctrl+C to close.\x1b[0m");
       console.log("");
-      // Track where participant status starts
-      statusLine = (qr.split("\n").length) + 20;
+      statusLine = (qr.split("\n").length) + 22;
     });
   }
 );
