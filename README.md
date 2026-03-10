@@ -1,5 +1,9 @@
 # hotmic 🎙️
 
+<p align="center">
+  <img src="screenshot.jpg" alt="hotmic terminal screenshot" width="700">
+</p>
+
 Disposable voice rooms from your terminal. One command, one QR code, zero signup.
 
 ```bash
